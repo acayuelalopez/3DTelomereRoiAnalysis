@@ -6,13 +6,14 @@ import ij.measure.Calibration
 import ij.measure.ResultsTable
 import ij.plugin.ChannelSplitter
 import ij.plugin.Duplicator
-import ij.plugin.RGBStackMerge
-import ij.plugin.ZProjector
+import ij.plugin.frame.RoiManager
 import inra.ijpb.label.LabelImages
 import inra.ijpb.measure.region3d.RegionAnalyzer3D
 import inra.ijpb.morphology.Strel
 import loci.plugins.BF
 import loci.plugins.in.ImporterOptions
+import mcib3d.geom.Objects3DPopulation
+import mcib3d.image3d.ImageInt
 import org.apache.commons.math3.stat.inference.KolmogorovSmirnovTest
 import java.util.stream.Stream;
 
@@ -24,9 +25,10 @@ import java.util.stream.Stream;
 //#@File(label = "Red model", style = "file") redModel
 //#@Integer(label = "Reference Channel", value = 1) refIndex
 //#@Integer(label = "Target Channel", value = 2) targetIndex
-def inputFiles = new File("/mnt/imgserver/CONFOCAL/IA/Projects/2025/2025_2_14_jfiel/images")
-def outputDir = new File("/mnt/imgserver/CONFOCAL/IA/Projects/2025/2025_2_14_jfiel/output/images")
-
+def inputFiles = new File("/mnt/imgserver/CONFOCAL/IA/Projects/2025/2025_2_7_jfiel/output/images")
+def outputDir = new File("/mnt/imgserver/CONFOCAL/IA/Projects/2025/2025_2_7_jfiel/output/preprocess")
+def rm = new RoiManager()
+rm = RoiManager.getInstance()
 // IDE
 //
 //
@@ -34,37 +36,33 @@ def outputDir = new File("/mnt/imgserver/CONFOCAL/IA/Projects/2025/2025_2_14_jfi
 //new ImageJ().setVisible(true);
 
 IJ.log("-Parameters selected: ")
-IJ.log("    -inputFileDir Ref: " + inputFiles)
+IJ.log("    -inputFileDir: " + inputFiles)
 IJ.log("    -outputDir: " + outputDir)
-//IJ.log("    -Green Model: "+greenModel)
-//IJ.log("    -Red Model: "+redModel)
-
 
 IJ.log("                                                           ");
 /** Get files (images) from input directory */
 def listOfFiles = inputFiles.listFiles(); ;
 
-for (def i = 0; i < listOfFiles.length; i++) {
-/** Importer options for .lif file */
-    def options = new ImporterOptions();
-    options.setId(inputFiles.getAbsolutePath() + File.separator + listOfFiles[i].getName());
-    options.setSplitChannels(false);
-    options.setSplitTimepoints(false);
-    options.setSplitFocalPlanes(false);
-    options.setAutoscale(true);
-    options.setStackFormat(ImporterOptions.VIEW_HYPERSTACK);
-    options.setStackOrder(ImporterOptions.ORDER_XYCZT);
-    options.setColorMode(ImporterOptions.COLOR_MODE_COMPOSITE);
-    options.setCrop(false);
-    options.setOpenAllSeries(true);
-    def imps = BF.openImagePlus(options);
 
-    for (def j = 0; j < imps.length; j++) {
-
-        /** Get image serie per lif */
-        def imp = imps[j]
-        IJ.saveAs(imp, "Tiff", outputDir.getAbsolutePath() + File.separator + imp.getTitle().replaceAll("/", ""))
-
-
+def rois = rm.getRoisAsArray()
+for (def k = 0; k < rois.length; k++) {
+    IJ.log(rm.getName(rm.getRoiIndex(rois[k])).replaceAll("/", ""))
+    def roiName = rm.getName(rm.getRoiIndex(rois[k])).replaceAll("/", "")
+    def imp = new ImagePlus(inputFiles.getAbsolutePath() + File.separator + rm.getName(rm.getRoiIndex(rois[k])).replaceAll("/", "") + ".tif")
+    // Create a new stack to hold the processed slices
+    def newStack = new ImageStack(imp.getWidth(), imp.getHeight())
+    // Iterate through slices of the z-stack
+    def stack = imp.getStack()
+    for (int i = 1; i <= stack.getSize(); i++) {
+        // Get the processed slice as an ImagePlus
+        def slice = new ImagePlus("slice" + i, stack.getProcessor(i))
+        slice.setRoi(rois[k])
+        IJ.run(slice, "Make Inverse", "")
+        IJ.setBackgroundColor(0, 0, 0)
+        IJ.run(slice, "Clear", "slice")
+        newStack.addSlice(slice.getProcessor())
     }
+    IJ.saveAs(imp, "Tiff", outputDir.getAbsolutePath() + File.separator + rm.getName(rm.getRoiIndex(rois[k])).replaceAll("/", ""))
+
+
 }
